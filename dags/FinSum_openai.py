@@ -28,6 +28,8 @@ from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
 
+from include.helpers import start_debug
+
 OPENAI_CONN_ID = "openai_default"
 
 logger = logging.getLogger("airflow.task")
@@ -64,6 +66,8 @@ def FinSum_OpenAI(ticker: str = None):
     storage but for the purpose of demo we store them on local disk.
 
     """
+
+    start_debug()
 
     def remove_html_tables(content: str):
         """
