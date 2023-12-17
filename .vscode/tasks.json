@@ -4,7 +4,7 @@
     {
       "label": "start-FinSum_OpenAI-dag",
       "type": "shell",
-      "command": "docker exec -d $(docker ps --filter 'label=com.docker.compose.service=webserver' -q) airflow dags test FinSum_OpenAI; sleep 5",
+      "command": "docker exec -e DEBUG_DAG=1 -d $(docker ps --filter 'label=com.docker.compose.service=webserver' -q) airflow dags test FinSum_OpenAI; sleep 5",
       "options": {
         "shell": {
           "executable": "/bin/bash",
