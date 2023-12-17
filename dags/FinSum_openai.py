@@ -45,6 +45,7 @@ default_args = {"retries": 3, "retry_delay": 30, "trigger_rule": "none_failed"}
     catchup=False,
     is_paused_upon_creation=True,
     default_args=default_args,
+    dagrun_timeout=datetime.timedelta(minutes=60),
     params={
         "ticker": Param(
             "",
