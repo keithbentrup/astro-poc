@@ -1,38 +1,38 @@
 """
 ## Summarize and search financial documents using OpenAI's LLMs.
 
-This DAG extracts and splits financial reporting data from the US 
-[Securities and Exchanges Commision (SEC) EDGAR database](https://www.sec.gov/edgar) and generates 
-vector embeddings with OpenAI embeddings model for generative question answering.  The DAG also 
+This DAG extracts and splits financial reporting data from the US
+[Securities and Exchanges Commision (SEC) EDGAR database](https://www.sec.gov/edgar) and generates
+vector embeddings with OpenAI embeddings model for generative question answering.  The DAG also
 creates and vectorizes summarizations of the 10-Q document using OpenAI completions.
 """
 from __future__ import annotations
 
+import datetime
+import logging
+import unicodedata
+import uuid
+from pathlib import Path
+
+import openai as openai_client
+import pandas as pd
+import requests
 from airflow.decorators import dag, task
 from airflow.exceptions import AirflowException
 from airflow.models.param import Param
 from airflow.providers.openai.hooks.openai import OpenAIHook
-
 from bs4 import BeautifulSoup
-import datetime
 from langchain.schema import Document
 from langchain.text_splitter import (
     HTMLHeaderTextSplitter,
     RecursiveCharacterTextSplitter,
 )
-import logging
-import openai as openai_client
-import pandas as pd
-from pathlib import Path
-import requests
-import unicodedata
-import uuid
 
 OPENAI_CONN_ID = "openai_default"
 
 logger = logging.getLogger("airflow.task")
 
-edgar_headers={"User-Agent": "test1@test1.com"}
+edgar_headers = {"User-Agent": "test1@test1.com"}
 
 default_args = {"retries": 3, "retry_delay": 30, "trigger_rule": "none_failed"}
 
@@ -54,18 +54,18 @@ default_args = {"retries": 3, "retry_delay": 30, "trigger_rule": "none_failed"}
 )
 def FinSum_OpenAI(ticker: str = None):
     """
-    This DAG extracts and splits financial reporting data from the US 
-    [Securities and Exchanges Commision (SEC) EDGAR database](https://www.sec.gov/edgar) and generates 
-    vector embeddings with openai embeddings model for generative question answering.  The DAG also 
+    This DAG extracts and splits financial reporting data from the US
+    [Securities and Exchanges Commision (SEC) EDGAR database](https://www.sec.gov/edgar) and generates
+    vector embeddings with openai embeddings model for generative question answering.  The DAG also
     creates and vectorizes summarizations of the 10-Q document.
 
     With very large datasets it may not be convenient to store embeddings in a vector database.  This DAG
-    shows how to save documents with vectors on disk. Realistically these would be serialized in cloud object 
+    shows how to save documents with vectors on disk. Realistically these would be serialized in cloud object
     storage but for the purpose of demo we store them on local disk.
 
     """
 
-    def remove_html_tables(content:str):
+    def remove_html_tables(content: str):
         """
         Remove all "table" tags from html content leaving only text.
 
@@ -77,7 +77,7 @@ def FinSum_OpenAI(ticker: str = None):
         for table in soup.find_all("table"):
             _ = table.replace_with(" ")
         soup.smooth()
-        
+
         clean_text = unicodedata.normalize("NFKD", soup.text)
 
         return clean_text
@@ -90,7 +90,7 @@ def FinSum_OpenAI(ticker: str = None):
         :return: Extracted plain text from html without any tables.
         """
         content = requests.get(doc_link, headers=edgar_headers)
-        
+
         if content.ok:
             content_type = content.headers['Content-Type']
             if content_type == 'text/html':
@@ -101,7 +101,7 @@ def FinSum_OpenAI(ticker: str = None):
         else:
             logger.warning(f"Unable to get content.  Skipping. Reason: {content.status_code} {content.reason}")
             content = None
-        
+
         return content
 
     def get_10q_link(accn: str, cik_number: str) -> str:
@@ -112,7 +112,7 @@ def FinSum_OpenAI(ticker: str = None):
         :param cik_number: SEC Central Index Key for the company
         :return: Fully-qualified url pointing to a 10-Q filing document.
         """
-        
+
         url_base = f"https://www.sec.gov/Archives/edgar/data/"
 
         link_base = f"{url_base}{cik_number}/{accn.replace('-','')}/"
@@ -137,7 +137,7 @@ def FinSum_OpenAI(ticker: str = None):
         """
         This task pulls 10-Q statements from the [SEC Edgar database](https://www.sec.gov/edgar/searchedgar/companysearch)
 
-        :param ticker: ticker symbol of company 
+        :param ticker: ticker symbol of company
         :param cik_number: optionally cik_number instead of ticker symbol
         :return: A dataframe
         """
@@ -145,7 +145,7 @@ def FinSum_OpenAI(ticker: str = None):
         logger.info(f"Extracting documents for ticker {ticker}.")
 
         company_list = requests.get(
-            url="https://www.sec.gov/files/company_tickers.json", 
+            url="https://www.sec.gov/files/company_tickers.json",
             headers=edgar_headers)
 
         if company_list.ok:
@@ -161,12 +161,12 @@ def FinSum_OpenAI(ticker: str = None):
             logger.error("Could not access ticker database.")
             logger.error(f"Reason: {company_list.status_code} {company_list.reason}")
             raise AirflowException("Could not access ticker database.")
-        
+
         company_facts = requests.get(
-            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik_number.zfill(10)}.json", 
+            f"https://data.sec.gov/api/xbrl/companyfacts/CIK{cik_number.zfill(10)}.json",
             headers=edgar_headers
             )
-            
+
         if company_facts.ok:
             forms_10q = []
             for fact in company_facts.json()['facts']['us-gaap'].values():
@@ -181,34 +181,34 @@ def FinSum_OpenAI(ticker: str = None):
             logger.error(f"Could not get company filing information for ticker: {ticker}, cik: {cik_number}.")
             logger.error(f"Reason: {company_facts.status_code} {company_facts.reason}")
             raise AirflowException(f"Could not get company filing information for ticker: {ticker}, cik: {cik_number}.")
-            
+
         docs = []
         for form in forms_10q:
             link_10q = get_10q_link(accn=form.get("accn"), cik_number=cik_number)
             docs.append({
-                "docLink": link_10q, 
+                "docLink": link_10q,
                 "tickerSymbol": ticker,
                 "cikNumber": cik_number,
-                "fiscalYear": form.get("fy"), 
+                "fiscalYear": form.get("fy"),
                 "fiscalPeriod": form.get("fp")
                 })
-            
+
         df = pd.DataFrame(docs)
 
         df["content"] = df.docLink.apply(lambda x: get_html_content(doc_link=x))
         df.dropna(inplace=True)
         df.drop_duplicates(inplace=True)
         df.reset_index(drop=True, inplace=True)
-        
+
         return df
 
     def split(df: pd.DataFrame) -> pd.DataFrame:
         """
-        This task concatenates multiple dataframes from upstream dynamic tasks and splits the content 
+        This task concatenates multiple dataframes from upstream dynamic tasks and splits the content
         first with an html splitter and then with a text splitter.
 
         :param df: A dataframe from an upstream extract task
-        :return: A dataframe 
+        :return: A dataframe
         """
 
         headers_to_split_on = [
@@ -238,7 +238,7 @@ def FinSum_OpenAI(ticker: str = None):
 
     def vectorize(df: pd.DataFrame, content_column_name: str, output_file_name: Path) -> str:
         """
-        This task concatenates multiple dataframes from upstream dynamic tasks and 
+        This task concatenates multiple dataframes from upstream dynamic tasks and
         vectorizes with OpenAI Embeddings.
 
         :param df: A Pandas dataframes from upstream split tasks
@@ -246,20 +246,20 @@ def FinSum_OpenAI(ticker: str = None):
         :param output_file_name: Path for saving embeddings as a parquet file
         :return: Location of saved file
         """
-        
+
         openai_hook = OpenAIHook(OPENAI_CONN_ID)
 
         df["id"] = df[content_column_name].apply(
             lambda x: str(uuid.uuid5(
-                name=x, 
+                name=x,
                 namespace=uuid.NAMESPACE_DNS)))
 
         df["vector"] = df[content_column_name].apply(
             lambda x: openai_hook.create_embeddings(
-                text=x, 
+                text=x,
                 model="text-embedding-ada-002")
             )
-        
+
         df.to_parquet(output_file_name)
 
         return output_file_name
@@ -277,7 +277,7 @@ def FinSum_OpenAI(ticker: str = None):
         """
 
         logger.info(f"Summarizing chunk for ticker {ticker} {fy}:{fp}")
-        
+
         response = openai_client.ChatCompletion().create(
             model="gpt-3.5-turbo-1106",
             messages=[
@@ -297,7 +297,7 @@ def FinSum_OpenAI(ticker: str = None):
             return content
         else:
             return None
-    
+
     def doc_summarization_openai(
             openai_client: openai_client, content: str, doc_link: str) -> str:
         """
@@ -330,7 +330,7 @@ def FinSum_OpenAI(ticker: str = None):
             return content
         else:
             return None
-        
+
     def summarize_openai(df: pd.DataFrame) -> pd.DataFrame:
         """
         This task uses openai to recursively summarize extracted documents. First the individual
@@ -339,23 +339,23 @@ def FinSum_OpenAI(ticker: str = None):
         :param df: A Pandas dataframe from upstream split tasks
         :return: A Pandas dataframe with summaries for ingest to a vector DB.
         """
-        
+
         openai_client.api_key = OpenAIHook("openai_default")._get_api_key()
 
         df["chunk_summary"] = df.apply(lambda x: chunk_summarization_openai(
-            openai_client=openai_client, 
-            content=x.content, 
-            fy=x.fiscalYear, 
-            fp=x.fiscalPeriod, 
+            openai_client=openai_client,
+            content=x.content,
+            fy=x.fiscalYear,
+            fp=x.fiscalPeriod,
             ticker=x.tickerSymbol), axis=1)
 
         summaries_df = df.groupby("docLink").chunk_summary.apply("\n".join).reset_index()
 
         summaries_df["summary"] = summaries_df.apply(lambda x: doc_summarization_openai(
-            openai_client=openai_client, 
-            content=x.chunk_summary, 
+            openai_client=openai_client,
+            content=x.chunk_summary,
             doc_link=x.docLink), axis=1)
-        
+
         summaries_df.drop("chunk_summary", axis=1, inplace=True)
 
         summary_df = df.drop(["content", "chunk_summary"], axis=1).drop_duplicates().merge(summaries_df)
