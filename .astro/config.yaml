@@ -1,2 +1,4 @@
+airflow:
+  expose_port: "true"
 project:
   name: astro-poc
