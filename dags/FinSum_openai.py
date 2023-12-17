@@ -28,7 +28,7 @@ from langchain.text_splitter import (
     RecursiveCharacterTextSplitter,
 )
 
-from include.helpers import start_debug
+from include.helpers import start_DAG_debug_by_env
 
 OPENAI_CONN_ID = "openai_default"
 
@@ -67,7 +67,7 @@ def FinSum_OpenAI(ticker: str = None):
 
     """
 
-    # start_debug()
+    start_DAG_debug_by_env()
 
     def remove_html_tables(content: str):
         """
