@@ -67,7 +67,7 @@ def FinSum_OpenAI(ticker: str = None):
 
     """
 
-    start_debug()
+    # start_debug()
 
     def remove_html_tables(content: str):
         """
