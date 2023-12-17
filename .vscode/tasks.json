@@ -2,9 +2,9 @@
   "version": "2.0.0",
   "tasks": [
     {
-      "label": "start-coretech_llm_load_github-dag",
+      "label": "start-FinSum_OpenAI-dag",
       "type": "shell",
-      "command": "docker exec -d $(docker ps --filter 'label=com.docker.compose.service=webserver' -q) airflow dags test coretech_llm_load_github; sleep 5",
+      "command": "docker exec -d $(docker ps --filter 'label=com.docker.compose.service=webserver' -q) airflow dags test FinSum_OpenAI; sleep 5",
       "options": {
         "shell": {
           "executable": "/bin/bash",

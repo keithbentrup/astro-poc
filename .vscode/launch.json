@@ -5,11 +5,11 @@
   "version": "0.2.0",
   "configurations": [
     {
-      "name": "Debug coretech_llm_load_github DAG",
+      "name": "Debug FinSum_OpenAI DAG",
       "type": "python",
       "request": "attach",
       "connect": {
-        "host": "127.0.0.1",
+        "host": "192.168.12.12",
         "port": 5678
       },
       "pathMappings": [
@@ -18,7 +18,7 @@
           "remoteRoot": "/usr/local/airflow"
         }
       ],
-      "preLaunchTask": "start-coretech_llm_load_github-dag",
+      "preLaunchTask": "start-FinSum_OpenAI-dag",
       "justMyCode": true
     }
   ]
